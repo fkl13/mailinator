@@ -16,16 +16,23 @@ func (app *application) routes() http.Handler {
 }
 
 func (app *application) createMailHandler(w http.ResponseWriter, r *http.Request) {
-	buf := make([]byte, 8)
-	if _, err := rand.Read(buf); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	token := hex.EncodeToString(buf)
+	var address string
+	for {
+		buf := make([]byte, 8)
+		if _, err := rand.Read(buf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		address = fmt.Sprintf("%s@mailinator.local", hex.EncodeToString(buf))
 
-	mailbox := fmt.Sprintf("%s@mailinator.local", token)
+		ok := app.store.Create(address)
+		if ok {
+			break
+		}
+
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"address": mailbox})
+	json.NewEncoder(w).Encode(map[string]string{"address": address})
 }

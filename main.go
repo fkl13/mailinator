@@ -13,6 +13,7 @@ type config struct {
 
 type application struct {
 	config config
+	store  store
 }
 
 func main() {
@@ -23,6 +24,7 @@ func main() {
 
 	app := application{
 		config: cfg,
+		store:  NewStore(),
 	}
 
 	server := http.Server{
