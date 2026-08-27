@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -114,6 +115,116 @@ func TestCreateDuplicate(t *testing.T) {
 					}
 				}
 
+			}
+		})
+	}
+}
+
+type addMessageStep struct {
+	address string
+	sender  string
+	subject string
+	body    string
+	wantErr error
+}
+
+func TestAddMessage(t *testing.T) {
+	tests := []struct {
+		name         string
+		addresses    []string
+		steps        []addMessageStep
+		checkAddress string
+		wantCount    int
+	}{
+		{
+			name:      "Message persists in mailbox",
+			addresses: []string{"a@b.com"},
+			steps: []addMessageStep{
+				{address: "a@b.com", sender: "x@y.com", subject: "hi", body: "body", wantErr: nil},
+			},
+			checkAddress: "a@b.com",
+			wantCount:    1,
+		},
+		{
+			name:      "Unknown address",
+			addresses: []string{"a@b.com"},
+			steps: []addMessageStep{
+				{address: "unknown@b.com", sender: "x@y.com", subject: "hi", body: "body", wantErr: ErrMailboxNotFound},
+			},
+			checkAddress: "a@b.com",
+			wantCount:    0,
+		},
+		{
+			name:      "Independent mailboxes",
+			addresses: []string{"a@b.com", "b@b.com"},
+			steps: []addMessageStep{
+				{address: "a@b.com", sender: "x@y.com", subject: "hi", body: "body", wantErr: nil},
+			},
+			checkAddress: "b@b.com",
+			wantCount:    0,
+		},
+		{
+			name:      "Multiple messages same mailbox",
+			addresses: []string{"a@b.com"},
+			steps: []addMessageStep{
+				{address: "a@b.com", sender: "x@y.com", subject: "one", body: "body 1", wantErr: nil},
+				{address: "a@b.com", sender: "x@y.com", subject: "two", body: "body 2", wantErr: nil},
+			},
+			checkAddress: "a@b.com",
+			wantCount:    2,
+		},
+		{
+			name:      "Empty sender/subject/body allowed",
+			addresses: []string{"a@b.com"},
+			steps: []addMessageStep{
+				{address: "a@b.com", sender: "", subject: "", body: "", wantErr: nil},
+			},
+			checkAddress: "a@b.com",
+			wantCount:    1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			for _, address := range tt.addresses {
+				s.Create(address)
+			}
+
+			seenIDs := map[string]bool{}
+			for i, step := range tt.steps {
+				msg, err := s.AddMessage(step.address, step.sender, step.subject, step.body)
+				if !errors.Is(err, step.wantErr) {
+					t.Errorf("step %d: err = %v, want %v", i, err, step.wantErr)
+					continue
+				}
+
+				if step.wantErr != nil {
+					continue
+				}
+
+				if msg.Sender != step.sender || msg.Subject != step.subject || msg.Body != step.body {
+					t.Errorf("step %d: got message %+v want sender=%q subject=%q body=%q",
+						i, msg, step.sender, step.subject, step.body)
+				}
+
+				if msg.ID == "" {
+					t.Errorf("step %d: message id is empty", i)
+				}
+				if seenIDs[msg.ID] {
+					t.Errorf("step %d: duplicate message id %q", i, msg.ID)
+				}
+
+				seenIDs[msg.ID] = true
+			}
+
+			mb, ok := s.mailboxes[tt.checkAddress]
+			gotCount := 0
+			if ok {
+				gotCount = len(mb.messages)
+			}
+			if gotCount != tt.wantCount {
+				t.Errorf("mailbox %q has %d messages, want %d", tt.checkAddress, gotCount, tt.wantCount)
 			}
 		})
 	}
