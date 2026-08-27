@@ -11,6 +11,7 @@ func (app *application) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /mailboxes", app.createMailHandler)
 	mux.HandleFunc("POST /mailboxes/{address}/messages", app.createMessageHandler)
+	mux.HandleFunc("GET /mailboxes/{address}/messages/{id}", app.getMessageHandler)
 
 	return mux
 }
@@ -74,6 +75,33 @@ func (app *application) createMessageHandler(w http.ResponseWriter, r *http.Requ
 	err = writeJSON(w, http.StatusCreated, envelope)
 	if err != nil {
 		app.serverErrorResponse(w)
+	}
+}
+
+func (app *application) getMessageHandler(w http.ResponseWriter, r *http.Request) {
+	address := r.PathValue("address")
+	if address == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Address is missing")
+		return
+	}
+
+	messageID := r.PathValue("id")
+	if messageID == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Message id is missing")
+		return
+	}
+
+	message, err := app.store.GetMessage(address, messageID)
+	if err != nil {
+		app.errorResponse(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	envelope := envelope{"message": message}
+	err = writeJSON(w, http.StatusOK, envelope)
+	if err != nil {
+		app.serverErrorResponse(w)
+		return
 	}
 }
 

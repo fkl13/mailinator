@@ -251,3 +251,96 @@ func TestStoreConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 }
+
+type seedMessage struct {
+	sender  string
+	subject string
+	body    string
+}
+
+func TestGetMessage(t *testing.T) {
+	tests := []struct {
+		name            string
+		createAddresses []string
+		seedAddress     string
+		seedMessages    []seedMessage
+		lookupAddress   string
+		lookupIndex     int
+		wantErr         error
+	}{
+		{
+			name:            "message exists in store",
+			createAddresses: []string{"a@b.com"},
+			seedAddress:     "a@b.com",
+			seedMessages:    []seedMessage{{sender: "x@y.com", subject: "hi", body: "body"}},
+			lookupAddress:   "a@b.com",
+			lookupIndex:     0,
+			wantErr:         nil,
+		},
+		{
+			name:            "message doesn't exist in store",
+			createAddresses: []string{"a@b.com"},
+			seedAddress:     "a@b.com",
+			seedMessages:    []seedMessage{{sender: "x@y.com", subject: "hi", body: "body"}},
+			lookupAddress:   "a@b.com",
+			lookupIndex:     -1,
+			wantErr:         ErrMessageNotFound,
+		},
+		{
+			name:            "mailbox doesn't exist",
+			createAddresses: []string{"a@b.com"},
+			seedAddress:     "a@b.com",
+			lookupAddress:   "unknown@b.com",
+			lookupIndex:     -1,
+			wantErr:         ErrMailboxNotFound,
+		},
+		{
+			name:            "find message in list with several messages",
+			createAddresses: []string{"a@b.com"},
+			seedAddress:     "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+				{sender: "x@y.com", subject: "three", body: "body 3"},
+			},
+			lookupAddress: "a@b.com",
+			lookupIndex:   1,
+			wantErr:       nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			for _, address := range tt.createAddresses {
+				s.Create(address)
+			}
+
+			var seeded []message
+			for _, sm := range tt.seedMessages {
+				msg, err := s.AddMessage(tt.seedAddress, sm.sender, sm.subject, sm.body)
+				if err != nil {
+					t.Fatalf("setup: AddMessage failed: %v", err)
+				}
+				seeded = append(seeded, msg)
+			}
+
+			messageID := "nonexistent-id"
+			if tt.lookupIndex >= 0 {
+				messageID = seeded[tt.lookupIndex].ID
+			}
+
+			got, gotErr := s.GetMessage(tt.lookupAddress, messageID)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Errorf("err = %v, want %v", gotErr, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+
+			want := seeded[tt.lookupIndex]
+			if got != want {
+				t.Errorf("got %+v, want %+v", got, want)
+			}
+		})
+	}
+}

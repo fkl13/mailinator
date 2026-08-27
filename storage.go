@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-var ErrMailboxNotFound = errors.New("mailbox not found")
+var (
+	ErrMailboxNotFound = errors.New("mailbox not found")
+	ErrMessageNotFound = errors.New("message not found")
+)
 
 type store struct {
 	mailboxes map[string]*mailbox
@@ -82,6 +85,24 @@ func (s *store) AddMessage(address, sender, subject, body string) (message, erro
 	mailbox.messages = append(mailbox.messages, message)
 
 	return message, nil
+}
+
+func (s *store) GetMessage(address, messageID string) (message, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mailbox, ok := s.mailboxes[address]
+	if !ok {
+		return message{}, ErrMailboxNotFound
+	}
+
+	for _, message := range mailbox.messages {
+		if message.ID == messageID {
+			return message, nil
+		}
+	}
+
+	return message{}, ErrMessageNotFound
 }
 
 func generateID() (string, error) {
