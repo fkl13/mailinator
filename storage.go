@@ -4,13 +4,21 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"sync"
 	"time"
+)
+
+const (
+	defaultLimit    = 10
+	defaultMaxLimit = 50
 )
 
 var (
 	ErrMailboxNotFound = errors.New("mailbox not found")
 	ErrMessageNotFound = errors.New("message not found")
+	ErrInvalidCursor   = errors.New("invalid cursor")
+	ErrInvalidLimit    = errors.New("invalid limit")
 )
 
 type store struct {
@@ -103,6 +111,52 @@ func (s *store) GetMessage(address, messageID string) (message, error) {
 	}
 
 	return message{}, ErrMessageNotFound
+}
+
+func (s *store) ListMessages(address, cursor string, limit int) ([]message, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mailbox, ok := s.mailboxes[address]
+	if !ok {
+		return []message{}, "", ErrMailboxNotFound
+	}
+
+	if limit <= 0 {
+		return []message{}, "", ErrInvalidLimit
+	}
+	if limit > defaultMaxLimit {
+		limit = defaultMaxLimit
+	}
+
+	endIdx := len(mailbox.messages)
+	if cursor != "" {
+		found := false
+		for i := len(mailbox.messages) - 1; i > -1; i-- {
+			if cursor == mailbox.messages[i].ID {
+				endIdx = i
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return []message{}, "", ErrInvalidCursor
+		}
+	}
+
+	startIdx := max(0, endIdx-limit)
+	messages := make([]message, endIdx-startIdx)
+	copy(messages, mailbox.messages[startIdx:endIdx])
+	slices.Reverse(messages)
+
+	nextCursor := ""
+	if startIdx > 0 {
+		last := messages[len(messages)-1]
+		nextCursor = last.ID
+	}
+
+	return messages, nextCursor, nil
 }
 
 func generateID() (string, error) {

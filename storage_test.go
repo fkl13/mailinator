@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -342,5 +344,164 @@ func TestGetMessage(t *testing.T) {
 				t.Errorf("got %+v, want %+v", got, want)
 			}
 		})
+	}
+}
+
+func TestListMessages(t *testing.T) {
+	tests := []struct {
+		name           string
+		seedAddress    string
+		seedMessages   []seedMessage
+		lookupAddress  string
+		limit          int
+		cursor         string
+		wantNextCursor string
+		wantErr        error
+	}{
+		{
+			name:          "Empty mailbox",
+			seedAddress:   "a@b.com",
+			seedMessages:  []seedMessage{},
+			lookupAddress: "a@b.com",
+			limit:         defaultLimit,
+			cursor:        "",
+			wantErr:       nil,
+		},
+		{
+			name:          "Unknown address",
+			seedAddress:   "a@b.com",
+			seedMessages:  []seedMessage{},
+			lookupAddress: "b@b.com",
+			limit:         defaultLimit,
+			cursor:        "",
+			wantErr:       ErrMailboxNotFound,
+		},
+		{
+			name:        "Known address, made-up cursor",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+				{sender: "x@y.com", subject: "three", body: "body 3"},
+			},
+			lookupAddress: "a@b.com",
+			limit:         defaultLimit,
+			cursor:        "made-up cursor",
+			wantErr:       ErrInvalidCursor,
+		},
+		{
+			name:        "Invalid limit",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+			},
+			lookupAddress: "a@b.com",
+			limit:         0,
+			cursor:        "",
+			wantErr:       ErrInvalidLimit,
+		},
+		{
+			name:        "Fewer messages than limit",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+			},
+			lookupAddress: "a@b.com",
+			limit:         defaultLimit,
+			cursor:        "",
+			wantErr:       nil,
+		},
+		{
+			name:        "Messages exactly equal to limit",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+			},
+			lookupAddress: "a@b.com",
+			limit:         2,
+			cursor:        "",
+			wantErr:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			s.Create(tt.seedAddress)
+
+			seeded := []message{}
+			for _, sm := range tt.seedMessages {
+				msg, err := s.AddMessage(tt.seedAddress, sm.sender, sm.subject, sm.body)
+				if err != nil {
+					t.Fatalf("setup: AddMessage failed: %v", err)
+				}
+				seeded = append(seeded, msg)
+			}
+
+			slices.Reverse(seeded) // ListMessage returns in recency order
+
+			gotMessages, gotCursor, gotErr := s.ListMessages(tt.lookupAddress, tt.cursor, tt.limit)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Errorf("err = %v, want %v", gotErr, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+
+			if gotCursor != tt.wantNextCursor {
+				t.Errorf("got cursor = %v, want %q", gotCursor, tt.cursor)
+			}
+
+			if !reflect.DeepEqual(gotMessages, seeded) {
+				t.Errorf("got messages = %+v, want %+v", gotMessages, seeded)
+			}
+		})
+	}
+}
+
+func TestListMessagesPagination(t *testing.T) {
+	seedAddress := "a@b.com"
+	seedMessages := []seedMessage{
+		{sender: "x@y.com", subject: "one", body: "body 1"},
+		{sender: "x@y.com", subject: "two", body: "body 2"},
+		{sender: "x@y.com", subject: "three", body: "body 3"},
+	}
+	limit := 2
+
+	s := NewStore()
+	s.Create(seedAddress)
+
+	seeded := []message{}
+	for _, sm := range seedMessages {
+		msg, err := s.AddMessage(seedAddress, sm.sender, sm.subject, sm.body)
+		if err != nil {
+			t.Fatalf("setup: AddMessage failed: %v", err)
+		}
+		seeded = append(seeded, msg)
+	}
+	slices.Reverse(seeded)
+
+	gotMessages, gotCursor, gotErr := s.ListMessages(seedAddress, "", limit)
+	if gotErr != nil {
+		t.Fatalf("got error %v, expected no error", gotErr)
+	}
+	if gotCursor == "" {
+		t.Errorf("got cursor %v, want non-empty", gotCursor)
+	}
+	if !reflect.DeepEqual(gotMessages, seeded[:limit]) {
+		t.Errorf("got messages = %+v, want %+v", gotMessages, seeded[:limit])
+	}
+
+	gotMessages2, gotCursor2, gotErr := s.ListMessages(seedAddress, gotCursor, limit)
+	if gotErr != nil {
+		t.Fatalf("got error %v, expected no error", gotErr)
+	}
+	if gotCursor2 != "" {
+		t.Errorf("got cursor %v, want empty string", gotCursor2)
+	}
+	if !reflect.DeepEqual(gotMessages2, seeded[limit:]) {
+		t.Errorf("got messages = %+v, want %+v", gotMessages2, seeded[limit:])
 	}
 }

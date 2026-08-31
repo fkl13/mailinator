@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 func (app *application) routes() http.Handler {
@@ -12,6 +13,7 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("POST /mailboxes", app.createMailHandler)
 	mux.HandleFunc("POST /mailboxes/{address}/messages", app.createMessageHandler)
 	mux.HandleFunc("GET /mailboxes/{address}/messages/{id}", app.getMessageHandler)
+	mux.HandleFunc("GET /mailboxes/{address}/messages", app.listMessagesHandler)
 
 	return mux
 }
@@ -98,6 +100,68 @@ func (app *application) getMessageHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	envelope := envelope{"message": message}
+	err = writeJSON(w, http.StatusOK, envelope)
+	if err != nil {
+		app.serverErrorResponse(w)
+		return
+	}
+}
+
+type listMessage struct {
+	ID      string `json:"id"`
+	Sender  string `json:"sender"`
+	Subject string `json:"subject"`
+}
+
+func (app *application) listMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	address := r.PathValue("address")
+	if address == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Address is missing")
+		return
+	}
+
+	cursor := r.URL.Query().Get("cursor")
+	limitStr := r.URL.Query().Get("limit")
+	var limit int
+	if limitStr == "" {
+		limit = defaultLimit
+	} else {
+		parsed, err := strconv.ParseUint(limitStr, 10, 32)
+		if err != nil {
+			app.errorResponse(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		limit = int(parsed)
+	}
+
+	messages, nextCursor, err := app.store.ListMessages(address, cursor, limit)
+	if errors.Is(err, ErrMailboxNotFound) {
+		app.errorResponse(w, http.StatusNotFound, err.Error())
+		return
+	} else if errors.Is(err, ErrInvalidCursor) {
+		app.errorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	} else if errors.Is(err, ErrInvalidLimit) {
+		app.errorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	} else if err != nil {
+		app.serverErrorResponse(w)
+		return
+	}
+
+	responseMessages := []listMessage{}
+	for _, msg := range messages {
+		responseMessages = append(responseMessages, listMessage{
+			ID:      msg.ID,
+			Sender:  msg.Sender,
+			Subject: msg.Subject,
+		})
+	}
+
+	envelope := envelope{
+		"messages":   responseMessages,
+		"nextCursor": nextCursor,
+	}
 	err = writeJSON(w, http.StatusOK, envelope)
 	if err != nil {
 		app.serverErrorResponse(w)
