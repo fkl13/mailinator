@@ -14,6 +14,8 @@ func (app *application) routes() http.Handler {
 	mux.HandleFunc("POST /mailboxes/{address}/messages", app.createMessageHandler)
 	mux.HandleFunc("GET /mailboxes/{address}/messages/{id}", app.getMessageHandler)
 	mux.HandleFunc("GET /mailboxes/{address}/messages", app.listMessagesHandler)
+	mux.HandleFunc("DELETE /mailboxes/{address}", app.deleteMailboxHandler)
+	mux.HandleFunc("DELETE /mailboxes/{address}/messages/{id}", app.deleteMessageHandler)
 
 	return mux
 }
@@ -167,6 +169,44 @@ func (app *application) listMessagesHandler(w http.ResponseWriter, r *http.Reque
 		app.serverErrorResponse(w)
 		return
 	}
+}
+
+func (app *application) deleteMailboxHandler(w http.ResponseWriter, r *http.Request) {
+	address := r.PathValue("address")
+	if address == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Address is missing")
+		return
+	}
+
+	err := app.store.DeleteMailbox(address)
+	if err != nil {
+		app.errorResponse(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (app *application) deleteMessageHandler(w http.ResponseWriter, r *http.Request) {
+	address := r.PathValue("address")
+	if address == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Address is missing")
+		return
+	}
+
+	messageID := r.PathValue("id")
+	if messageID == "" {
+		app.errorResponse(w, http.StatusBadRequest, "Message id is missing")
+		return
+	}
+
+	err := app.store.DeleteMessage(address, messageID)
+	if err != nil {
+		app.errorResponse(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (app *application) errorResponse(w http.ResponseWriter, status int, message any) {

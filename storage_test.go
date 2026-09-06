@@ -505,3 +505,125 @@ func TestListMessagesPagination(t *testing.T) {
 		t.Errorf("got messages = %+v, want %+v", gotMessages2, seeded[limit:])
 	}
 }
+
+func TestDeleteMailbox(t *testing.T) {
+	tests := []struct {
+		name          string
+		seedAddress   string
+		deleteAddress string
+		wantErr       error
+	}{
+		{
+			name:          "mailbox does not exist",
+			seedAddress:   "a@b.com",
+			deleteAddress: "b@b.com",
+			wantErr:       ErrMailboxNotFound,
+		},
+		{
+			name:          "delete mailbox successfully",
+			seedAddress:   "a@b.com",
+			deleteAddress: "a@b.com",
+			wantErr:       nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			s.Create(tt.seedAddress)
+
+			gotErr := s.DeleteMailbox(tt.deleteAddress)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Errorf("got error: %v, want %v", gotErr, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+
+			if _, ok := s.mailboxes[tt.deleteAddress]; ok {
+				t.Errorf("address %q not remove from store: %v", tt.deleteAddress, s.mailboxes)
+			}
+		})
+	}
+}
+
+func TestDeleteMessage(t *testing.T) {
+	tests := []struct {
+		name          string
+		seedAddress   string
+		seedMessages  []seedMessage
+		deleteAddress string
+		messageID     string
+		messageIdx    int
+		wantErr       error
+	}{
+		{
+			name:          "mailbox does not exist",
+			seedAddress:   "a@b.com",
+			seedMessages:  []seedMessage{},
+			deleteAddress: "b@b.com",
+			messageID:     "not relevant",
+			messageIdx:    0,
+			wantErr:       ErrMailboxNotFound,
+		},
+		{
+			name:        "message does not exist",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+				{sender: "x@y.com", subject: "three", body: "body 3"},
+			},
+			deleteAddress: "a@b.com",
+			messageID:     "does not exist",
+			messageIdx:    0,
+			wantErr:       ErrMessageNotFound,
+		},
+		{
+			name:        "delete message in the middle of the list",
+			seedAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1"},
+				{sender: "x@y.com", subject: "two", body: "body 2"},
+				{sender: "x@y.com", subject: "three", body: "body 3"},
+			},
+			deleteAddress: "a@b.com",
+			messageID:     "",
+			messageIdx:    1,
+			wantErr:       nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			s.Create(tt.seedAddress)
+
+			seeded := []message{}
+			for _, sm := range tt.seedMessages {
+				msg, err := s.AddMessage(tt.seedAddress, sm.sender, sm.subject, sm.body)
+				if err != nil {
+					t.Fatalf("setup: AddMessage failed: %v", err)
+				}
+				seeded = append(seeded, msg)
+			}
+
+			messageID := tt.messageID
+			if messageID == "" {
+				messageID = seeded[tt.messageIdx].ID
+			}
+
+			gotErr := s.DeleteMessage(tt.deleteAddress, messageID)
+			if !errors.Is(gotErr, tt.wantErr) {
+				t.Errorf("got error: %v, want %v", gotErr, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+
+			for _, msg := range s.mailboxes[tt.deleteAddress].messages {
+				if msg.ID == messageID {
+					t.Fatalf("expect message ID %s not in list, got %v", messageID, s.mailboxes[tt.deleteAddress].messages)
+				}
+			}
+		})
+	}
+}

@@ -497,3 +497,132 @@ func decodeJSONBody[T any](t *testing.T, res *http.Response) T {
 
 	return v
 }
+
+func TestDeleteMailboxHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		createAddress  string
+		deleteAddress  string
+		wantStatusCode int
+	}{
+		{
+			name:           "mailbox does not exist",
+			createAddress:  "a@b.com",
+			deleteAddress:  "b@b.com",
+			wantStatusCode: http.StatusNotFound,
+		},
+		{
+			name:           "mailbox exists",
+			createAddress:  "a@b.com",
+			deleteAddress:  "a@b.com",
+			wantStatusCode: http.StatusNoContent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newTestApp(t, []string{tt.createAddress})
+
+			path := fmt.Sprintf("/mailboxes/%s", tt.deleteAddress)
+			rec := doRequest(t, app, http.MethodDelete, path, nil)
+			res := rec.Result()
+			defer res.Body.Close()
+
+			if res.StatusCode != tt.wantStatusCode {
+				t.Fatalf("got status code %d, want %d", res.StatusCode, tt.wantStatusCode)
+			}
+
+			if tt.wantStatusCode != http.StatusNoContent {
+				return
+			}
+
+			if app.store.Exists(tt.deleteAddress) {
+				t.Fatalf("mailbox with address %q exists after delete", tt.deleteAddress)
+			}
+		})
+	}
+}
+
+func TestDeleteMessageHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		createAddress  string
+		seedMessages   []seedMessage
+		deleteAddress  string
+		messageID      string
+		messageIdx     int
+		wantStatusCode int
+	}{
+		{
+			name:           "mailbox does not exist",
+			createAddress:  "a@b.com",
+			deleteAddress:  "b@b.com",
+			seedMessages:   []seedMessage{},
+			messageID:      "not-relevant",
+			messageIdx:     0,
+			wantStatusCode: http.StatusNotFound,
+		},
+		{
+			name:          "message does not exist",
+			createAddress: "a@b.com",
+			deleteAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "subject", body: "body"},
+			},
+			messageID:      "does_not_exist",
+			messageIdx:     0,
+			wantStatusCode: http.StatusNotFound,
+		},
+		{
+			name:          "delete message",
+			createAddress: "a@b.com",
+			deleteAddress: "a@b.com",
+			seedMessages: []seedMessage{
+				{sender: "x@y.com", subject: "subject 1", body: "body 1"},
+				{sender: "x@y.com", subject: "subject 2", body: "body 2"},
+				{sender: "x@y.com", subject: "subject 3", body: "body 3"},
+			},
+			messageID:      "",
+			messageIdx:     1,
+			wantStatusCode: http.StatusNoContent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newTestApp(t, []string{tt.createAddress})
+
+			seeded := []message{}
+			for _, msg := range tt.seedMessages {
+				seedMessage, err := app.store.AddMessage(tt.createAddress, msg.sender, msg.subject, msg.body)
+				if err != nil {
+					t.Fatalf("couldn't create message: %v", err)
+				}
+				seeded = append(seeded, seedMessage)
+			}
+			slices.Reverse(seeded)
+
+			messageID := tt.messageID
+			if messageID == "" {
+				messageID = seeded[tt.messageIdx].ID
+			}
+
+			path := fmt.Sprintf("/mailboxes/%s/messages/%s", tt.deleteAddress, messageID)
+			rec := doRequest(t, app, http.MethodDelete, path, nil)
+			res := rec.Result()
+			defer res.Body.Close()
+
+			if res.StatusCode != tt.wantStatusCode {
+				t.Fatalf("got status code %d, want %d", res.StatusCode, tt.wantStatusCode)
+			}
+
+			if tt.wantStatusCode != http.StatusNoContent {
+				return
+			}
+
+			for _, msg := range app.store.mailboxes[tt.deleteAddress].messages {
+				if msg.ID == messageID {
+					t.Fatalf("expect message ID %s not in list, got %v", messageID, app.store.mailboxes[tt.deleteAddress].messages)
+				}
+			}
+		})
+	}
+}

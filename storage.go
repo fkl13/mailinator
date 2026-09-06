@@ -159,6 +159,37 @@ func (s *store) ListMessages(address, cursor string, limit int) ([]message, stri
 	return messages, nextCursor, nil
 }
 
+func (s *store) DeleteMailbox(address string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.mailboxes[address]; !ok {
+		return ErrMailboxNotFound
+	}
+	delete(s.mailboxes, address)
+
+	return nil
+}
+
+func (s *store) DeleteMessage(address, messageID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	mailbox, ok := s.mailboxes[address]
+	if !ok {
+		return ErrMailboxNotFound
+	}
+
+	for i, message := range mailbox.messages {
+		if message.ID == messageID {
+			mailbox.messages = slices.Delete(mailbox.messages, i, i+1)
+			return nil
+		}
+	}
+
+	return ErrMessageNotFound
+}
+
 func generateID() (string, error) {
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {
