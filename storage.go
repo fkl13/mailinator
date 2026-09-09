@@ -190,6 +190,22 @@ func (s *store) DeleteMessage(address, messageID string) error {
 	return ErrMessageNotFound
 }
 
+func (s *store) Evict(maxAge time.Duration) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	evicted := 0
+	now := time.Now()
+	for _, mailbox := range s.mailboxes {
+		before := len(mailbox.messages)
+		mailbox.messages = slices.DeleteFunc(mailbox.messages, func(msg message) bool {
+			return now.Sub(msg.ReceivedAt) > maxAge
+		})
+		evicted += before - len(mailbox.messages)
+	}
+	return evicted
+}
+
 func generateID() (string, error) {
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {

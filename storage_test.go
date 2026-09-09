@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 )
 
 type createStep struct {
@@ -622,6 +623,90 @@ func TestDeleteMessage(t *testing.T) {
 			for _, msg := range s.mailboxes[tt.deleteAddress].messages {
 				if msg.ID == messageID {
 					t.Fatalf("expect message ID %s not in list, got %v", messageID, s.mailboxes[tt.deleteAddress].messages)
+				}
+			}
+		})
+	}
+}
+
+type seedEvictMessage struct {
+	seedMessage
+	backdated   time.Duration
+	wantEvicted bool
+}
+
+func TestEvict(t *testing.T) {
+	tests := []struct {
+		name          string
+		seedAddresses []string
+		seedMessages  []seedEvictMessage
+		maxAge        time.Duration
+		wantCount     int
+	}{
+		{
+			name:          "empty mailboxes",
+			seedAddresses: []string{"a@a.com", "b@b.com"},
+			seedMessages:  []seedEvictMessage{},
+			maxAge:        2 * time.Hour,
+			wantCount:     0,
+		},
+		{
+			name:          "no eviction",
+			seedAddresses: []string{"a@a.com", "b@b.com"},
+			seedMessages: []seedEvictMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1", backdated: 0 * time.Minute, wantEvicted: false},
+				{sender: "x@y.com", subject: "two", body: "body 2", backdated: 59 * time.Minute, wantEvicted: false},
+				{sender: "x@y.com", subject: "three", body: "body 3", backdated: 0 * time.Minute, wantEvicted: false},
+			},
+			maxAge:    1 * time.Hour,
+			wantCount: 0,
+		},
+		{
+			name:          "evictions",
+			seedAddresses: []string{"a@a.com", "b@b.com"},
+			seedMessages: []seedEvictMessage{
+				{sender: "x@y.com", subject: "one", body: "body 1", backdated: 0 * time.Minute, wantEvicted: false},
+				{sender: "x@y.com", subject: "two", body: "body 2", backdated: 2 * time.Hour, wantEvicted: true},
+				{sender: "x@y.com", subject: "three", body: "body 3", backdated: 1*time.Hour + 1*time.Second, wantEvicted: true},
+			},
+			maxAge:    1 * time.Hour,
+			wantCount: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewStore()
+			seeded := map[string][]message{}
+			for _, address := range tt.seedAddresses {
+				s.Create(address)
+				for i, sm := range tt.seedMessages {
+					msg, err := s.AddMessage(address, sm.sender, sm.subject, sm.body)
+					if err != nil {
+						t.Fatalf("setup: AddMessage failed: %v", err)
+					}
+
+					msg.ReceivedAt = msg.ReceivedAt.Add(-sm.backdated)
+					s.mailboxes[address].messages[i] = msg
+					if !sm.wantEvicted {
+						seeded[address] = append(seeded[address], msg)
+					}
+				}
+			}
+
+			evicted := s.Evict(tt.maxAge)
+			if evicted != tt.wantCount {
+				t.Fatalf("got %d evicted, want %d", evicted, tt.wantCount)
+			}
+
+			for _, address := range tt.seedAddresses {
+				want := seeded[address]
+				got := s.mailboxes[address].messages
+				if len(want) == 0 && len(got) == 0 {
+					continue
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Errorf("mailbox %q messages = %+v, want %+v", address, got, want)
 				}
 			}
 		})
