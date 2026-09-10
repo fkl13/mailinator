@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 )
 
@@ -14,7 +13,7 @@ func (app *application) runEviction(ctx context.Context, interval, maxAge time.D
 		select {
 		case <-ticker.C:
 			count := app.store.Evict(maxAge)
-			log.Printf("Evicted %d messages", count)
+			app.logger.Info("evicted messages", "count", count)
 		case <-ctx.Done():
 			return
 		}

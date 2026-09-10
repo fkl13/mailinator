@@ -25,7 +25,7 @@ func (app *application) createMailHandler(w http.ResponseWriter, r *http.Request
 	for {
 		token, err := generateID()
 		if err != nil {
-			app.serverErrorResponse(w)
+			app.serverErrorResponse(w, err)
 			return
 		}
 		address = fmt.Sprintf("%s@mailinator.local", token)
@@ -40,7 +40,7 @@ func (app *application) createMailHandler(w http.ResponseWriter, r *http.Request
 	data := envelope{"address": address}
 	err := writeJSON(w, http.StatusCreated, data)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		app.serverErrorResponse(w, err)
 		return
 	}
 }
@@ -71,14 +71,14 @@ func (app *application) createMessageHandler(w http.ResponseWriter, r *http.Requ
 		app.errorResponse(w, http.StatusNotFound, err.Error())
 		return
 	} else if err != nil {
-		app.serverErrorResponse(w)
+		app.serverErrorResponse(w, err)
 		return
 	}
 
 	envelope := envelope{"message": message}
 	err = writeJSON(w, http.StatusCreated, envelope)
 	if err != nil {
-		app.serverErrorResponse(w)
+		app.serverErrorResponse(w, err)
 	}
 }
 
@@ -104,7 +104,7 @@ func (app *application) getMessageHandler(w http.ResponseWriter, r *http.Request
 	envelope := envelope{"message": message}
 	err = writeJSON(w, http.StatusOK, envelope)
 	if err != nil {
-		app.serverErrorResponse(w)
+		app.serverErrorResponse(w, err)
 		return
 	}
 }
@@ -147,7 +147,7 @@ func (app *application) listMessagesHandler(w http.ResponseWriter, r *http.Reque
 		app.errorResponse(w, http.StatusBadRequest, err.Error())
 		return
 	} else if err != nil {
-		app.serverErrorResponse(w)
+		app.serverErrorResponse(w, err)
 		return
 	}
 
@@ -166,7 +166,7 @@ func (app *application) listMessagesHandler(w http.ResponseWriter, r *http.Reque
 	}
 	err = writeJSON(w, http.StatusOK, envelope)
 	if err != nil {
-		app.serverErrorResponse(w)
+		app.serverErrorResponse(w, err)
 		return
 	}
 }
@@ -217,7 +217,9 @@ func (app *application) errorResponse(w http.ResponseWriter, status int, message
 	}
 }
 
-func (app *application) serverErrorResponse(w http.ResponseWriter) {
+func (app *application) serverErrorResponse(w http.ResponseWriter, err error) {
+	app.logger.Error("internal server error", "error", err)
+
 	message := "The server could not process your request"
 	app.errorResponse(w, http.StatusInternalServerError, message)
 }

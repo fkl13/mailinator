@@ -14,13 +14,15 @@ const (
 	defaultMaxLimit = 50
 )
 
+// Errors returned by the store.
 var (
-	ErrMailboxNotFound = errors.New("mailbox not found")
-	ErrMessageNotFound = errors.New("message not found")
-	ErrInvalidCursor   = errors.New("invalid cursor")
-	ErrInvalidLimit    = errors.New("invalid limit")
+	ErrMailboxNotFound = errors.New("mailbox not found") // The mailbox wasn't found in the store
+	ErrMessageNotFound = errors.New("message not found") // The message inside a mailbox wasn't found
+	ErrInvalidCursor   = errors.New("invalid cursor")    // The passed pagination cursor is invalid
+	ErrInvalidLimit    = errors.New("invalid limit")     // The passed pagination limit is invalid
 )
 
+// A store stores mailboxes and their corresponding messages in a map in-memory.
 type store struct {
 	mailboxes map[string]*mailbox
 	mu        sync.Mutex

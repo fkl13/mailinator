@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -11,7 +12,8 @@ import (
 func TestRunEviction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		app := application{
-			store: NewStore(),
+			store:  NewStore(),
+			logger: slog.New(slog.DiscardHandler),
 		}
 		address := "a@b.com"
 		app.store.Create(address)
