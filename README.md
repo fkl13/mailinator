@@ -1,5 +1,7 @@
 # Mailinator
 
+[![CI](https://github.com/fkl13/mailinator/actions/workflows/ci.yml/badge.svg)](https://github.com/fkl13/mailinator/actions/workflows/ci.yml)
+
 Mailinator is a web service for checking email sent to public, temporary email addresses.
 
 Mailinator stores the mailboxes and messages in-memory in a concurrency safe way. The web service
