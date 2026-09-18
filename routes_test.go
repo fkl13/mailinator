@@ -26,7 +26,7 @@ func doRequest(t *testing.T, app *application, method, target string, body io.Re
 func TestCreateMailHandler(t *testing.T) {
 	path := "/mailboxes"
 	app := &application{
-		store:  NewStore(),
+		store:  newStore(),
 		logger: slog.New(slog.DiscardHandler),
 	}
 	rec := doRequest(t, app, http.MethodPost, path, nil)
@@ -112,7 +112,7 @@ func TestCreateMessageHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			app := &application{
-				store:  NewStore(),
+				store:  newStore(),
 				logger: slog.New(slog.DiscardHandler),
 			}
 			if ok := app.store.Create(tt.createAddress); !ok {
@@ -167,7 +167,7 @@ func TestCreateMessageHandler(t *testing.T) {
 
 func newTestApp(t *testing.T, addresses []string) *application {
 	app := &application{
-		store:  NewStore(),
+		store:  newStore(),
 		logger: slog.New(slog.DiscardHandler),
 	}
 	for _, address := range addresses {

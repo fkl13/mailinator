@@ -12,7 +12,7 @@ import (
 func TestRunEviction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		app := application{
-			store:  NewStore(),
+			store:  newStore(),
 			logger: slog.New(slog.DiscardHandler),
 		}
 		address := "a@b.com"

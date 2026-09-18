@@ -42,8 +42,8 @@ type message struct {
 	ReceivedAt time.Time `json:"receivedAt"`
 }
 
-func NewStore() store {
-	return store{mailboxes: map[string]*mailbox{}}
+func newStore() *store {
+	return &store{mailboxes: map[string]*mailbox{}}
 }
 
 func (s *store) Create(address string) bool {

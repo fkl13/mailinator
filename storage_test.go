@@ -65,7 +65,7 @@ func TestStoreCreateAndExists(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			for i, step := range tt.steps {
 				if got := s.Create(step.address); got != step.wantOK {
 					t.Errorf("step %d: got %v for '%s', want %v", i, got, step.address, step.wantOK)
@@ -103,7 +103,7 @@ func TestCreateDuplicate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			for i, step := range tt.steps {
 				before := s.mailboxes[step.address]
 				got := s.Create(step.address)
@@ -189,7 +189,7 @@ func TestAddMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			for _, address := range tt.addresses {
 				s.Create(address)
 			}
@@ -234,7 +234,7 @@ func TestAddMessage(t *testing.T) {
 }
 
 func TestStoreConcurrentAccess(t *testing.T) {
-	s := NewStore()
+	s := newStore()
 
 	var wg sync.WaitGroup
 	const goroutines = 50
@@ -313,7 +313,7 @@ func TestGetMessage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			for _, address := range tt.createAddresses {
 				s.Create(address)
 			}
@@ -429,7 +429,7 @@ func TestListMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			s.Create(tt.seedAddress)
 
 			seeded := []message{}
@@ -471,7 +471,7 @@ func TestListMessagesPagination(t *testing.T) {
 	}
 	limit := 2
 
-	s := NewStore()
+	s := newStore()
 	s.Create(seedAddress)
 
 	seeded := []message{}
@@ -529,7 +529,7 @@ func TestDeleteMailbox(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			s.Create(tt.seedAddress)
 
 			gotErr := s.DeleteMailbox(tt.deleteAddress)
@@ -595,7 +595,7 @@ func TestDeleteMessage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			s.Create(tt.seedAddress)
 
 			seeded := []message{}
@@ -676,7 +676,7 @@ func TestEvict(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewStore()
+			s := newStore()
 			seeded := map[string][]message{}
 			for _, address := range tt.seedAddresses {
 				s.Create(address)
