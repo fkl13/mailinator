@@ -24,6 +24,7 @@ type config struct {
 	smtpPort         int
 	evictionInterval time.Duration
 	messageTTL       time.Duration
+	mailboxTTL       time.Duration
 	smtpDomain       string
 }
 
@@ -73,7 +74,7 @@ func run(cfg config) error {
 
 	// Eviction job
 	group.Go(func() error {
-		app.runEviction(groupCtx, cfg.evictionInterval, cfg.messageTTL)
+		app.runEviction(groupCtx, cfg.evictionInterval, cfg.mailboxTTL, cfg.messageTTL)
 		return nil
 	})
 
@@ -105,6 +106,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 8080, "API server port")
 	flag.DurationVar(&cfg.evictionInterval, "eviction-interval", 5*time.Minute, "Message eviction interval")
 	flag.DurationVar(&cfg.messageTTL, "message-ttl", 2*time.Hour, "Message time to live")
+	flag.DurationVar(&cfg.mailboxTTL, "mailbox-ttl", 4*time.Hour, "Mailbox time to live")
 	flag.IntVar(&cfg.smtpPort, "smtp-port", 2525, "SMTP server port")
 	flag.StringVar(&cfg.smtpDomain, "smtp-domain", "localhost", "SMTP server domain")
 	flag.Parse()

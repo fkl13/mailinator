@@ -1,7 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 
-to = "49b8e97bcf48be80@mailinator.local"
+to = "15e2fe5a5ab3166f@mailinator.local"
 msg = MIMEText("Hey")
 msg["Subject"] = "Test message"
 msg["From"] = "a@foo.com"

@@ -20,7 +20,7 @@ func NewSMTPServer(domain string, port int, store *store, logger *slog.Logger) *
 	server.Domain = domain
 	server.WriteTimeout = 30 * time.Second
 	server.ReadTimeout = 30 * time.Second
-	server.MaxMessageBytes = 1024 * 1024
+	server.MaxMessageBytes = maxMessageBytes
 	server.MaxRecipients = 50
 	server.AllowInsecureAuth = true
 

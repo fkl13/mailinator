@@ -25,13 +25,27 @@ func TestRunEviction(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		go app.runEviction(ctx, time.Second, time.Minute)
+		mailboxTTL := time.Hour
+		messageTTL := time.Minute
+		go app.runEviction(ctx, time.Second, mailboxTTL, messageTTL)
 
-		time.Sleep(90 * time.Second)
+		// Advance past messageTTL but well short of mailboxTTL.
+		time.Sleep(messageTTL + 10*time.Second)
 		synctest.Wait()
 
 		if _, err := app.store.GetMessage(address, msg.ID); !errors.Is(err, ErrMessageNotFound) {
 			t.Fatalf("message not evicted, got err=%v", err)
+		}
+		if !app.store.Exists(address) {
+			t.Fatalf("mailbox evicted too early")
+		}
+
+		// Advance past mailboxTTL.
+		time.Sleep(mailboxTTL)
+		synctest.Wait()
+
+		if app.store.Exists(address) {
+			t.Fatalf("mailbox not evicted")
 		}
 	})
 }

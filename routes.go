@@ -8,6 +8,8 @@ import (
 	"strconv"
 )
 
+const maxMessageBytes = 1024 * 1024
+
 func (app *application) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /mailboxes", app.createMailHandler)
@@ -60,8 +62,14 @@ func (app *application) createMessageHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxMessageBytes)
+
 	data, err := decodeJSON[CreateMessageRequest](r)
 	if err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			app.errorResponse(w, http.StatusRequestEntityTooLarge, "Request body is too large")
+			return
+		}
 		app.errorResponse(w, http.StatusBadRequest, "Failed to decode JSON")
 		return
 	}
