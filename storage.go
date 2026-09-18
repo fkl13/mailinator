@@ -25,7 +25,7 @@ var (
 // A store stores mailboxes and their corresponding messages in a map in-memory.
 type store struct {
 	mailboxes map[string]*mailbox
-	mu        sync.Mutex
+	mu        sync.RWMutex
 }
 
 type mailbox struct {
@@ -64,8 +64,8 @@ func (s *store) Create(address string) bool {
 }
 
 func (s *store) Exists(address string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	_, ok := s.mailboxes[address]
 	return ok
@@ -98,8 +98,8 @@ func (s *store) AddMessage(address, sender, subject, body string) (message, erro
 }
 
 func (s *store) GetMessage(address, messageID string) (message, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	mailbox, ok := s.mailboxes[address]
 	if !ok {
@@ -116,8 +116,8 @@ func (s *store) GetMessage(address, messageID string) (message, error) {
 }
 
 func (s *store) ListMessages(address, cursor string, limit int) ([]message, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	mailbox, ok := s.mailboxes[address]
 	if !ok {

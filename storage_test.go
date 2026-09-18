@@ -751,3 +751,33 @@ func TestEvict(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkAddMessage(b *testing.B) {
+	s := newStore()
+	s.Create("a@b.com")
+
+	for b.Loop() {
+		s.AddMessage("a@b.com", "x@y.com", "subject", "body")
+	}
+}
+
+func BenchmarkListMessages(b *testing.B) {
+	s := newStore()
+
+	for i := range 8 {
+		addr := fmt.Sprintf("mailbox-%d@b.com", i)
+		s.Create(addr)
+		for range 20 {
+			s.AddMessage(addr, "x@z.com", "subject", "body")
+		}
+	}
+
+	b.RunParallel(func(p *testing.PB) {
+		i := 0
+		for p.Next() {
+			addr := fmt.Sprintf("mailbox-%d@b.com", i%8)
+			s.ListMessages(addr, "", 10)
+			i++
+		}
+	})
+}

@@ -44,6 +44,14 @@ Run the full test suite with:
 $ go test -race ./...
 ```
 
+## Benchmark
+
+Run the benchmarks:
+
+```
+go test -bench=. -benchmem ./...
+```
+
 ## API endpoints
 
 Mailinator expose the following HTTP endpoints.
